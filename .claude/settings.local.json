@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"https://api.github.com/repos/egametang/ET/git/trees/release8.1?recursive=1\" 2>/dev/null | python3 -c \"\nimport json, sys\ndata = json.load\\(sys.stdin\\)\ntree = data.get\\('tree', []\\)\nfor item in tree:\n    path = item['path']\n    if \\('Scripts/Model/' in path or 'Scripts/Hotfix/' in path\\) and path.endswith\\('.cs'\\):\n        print\\(path\\)\n\" 2>/dev/null | head -100)",
+      "WebSearch",
+      "Bash(curl -s \"https://raw.githubusercontent.com/egametang/ET/release8.1/Unity/Assets/Scripts/Core/Analyzer/EntitySystemOf.cs\" 2>/dev/null)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/egametang/ET/release8.1/Unity/Assets/Scripts/Core/Analyzer/ComponentOfAttribute.cs\" 2>/dev/null)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/egametang/ET/release8.1/Unity/Assets/Scripts/Core/Analyzer/ChildOfAttribute.cs\" 2>/dev/null)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/egametang/ET/release8.1/Unity/Assets/Scripts/Loader/CodeLoader.cs\" 2>/dev/null)",
+      "Bash(git init)",
+      "Bash(git clone --branch release8.1 --depth 1 https://github.com/egametang/ET.git temp_et)",
+      "Bash(cp -r temp_et/* ./ && cp temp_et/.editorconfig ./ 2>/dev/null; cp temp_et/.gitignore ./ 2>/dev/null; rm -rf temp_et)"
+    ]
+  }
+}
