@@ -907,95 +907,21 @@ git commit -m "feat: 定义游戏核心事件（UnitSpawned/EquipChanged/BattleE
 
 ---
 
-## 任务 12：Luban 初始配置 — NumericType 配置表
+## 任务 12：属性类型配置表 — NumericConfig
+
+> **偏离原计划：** 原计划使用 Luban 配置系统，但 Luban CLI 未安装且 ET 8 已有内置 ExcelExporter。
+> 改为直接手写 ET 8 风格的 `[Config]` + `Category` 配置类，后续可通过 ExcelExporter 从 xlsx 生成。
 
 **文件：**
-- 创建：`Config/Luban/Datas/numeric.xlsx`（Excel 文件，手动创建）
-- 创建：`Config/Luban/gen.sh`（代码生成脚本）
+- 创建：`Unity/Assets/Scripts/Model/Generate/ClientServer/Config/NumericConfig.cs`
 
-- [ ] **步骤 1：创建 Luban 配置定义文件**
+- [x] **步骤 1：手写 NumericConfig 配置类**
 
-参考 Luban 官方文档创建配置定义。在 `Config/Luban/` 下创建 `__tables__.xlsx` 或使用 luban 的 json 定义方式。
+使用 ET 8 内置的 `[Config]` + `Category` 模式，字段：Id/Name/MaxValue/DefaultValue。
 
-创建文件 `Config/Luban/Defines/numeric.json`：
+- [x] **步骤 2：Unity 编译验证通过**
 
-```json
-{
-  "name": "TbNumeric",
-  "comment": "属性类型配置表",
-  "define": "NumericRecord",
-  "input": "Datas/numeric.xlsx",
-  "index": [
-    "Id"
-  ],
-  "fields": [
-    { "name": "Id", "type": "int", "comment": "属性类型ID，对应 NumericType 常量" },
-    { "name": "Name", "type": "string", "comment": "属性名称" },
-    { "name": "MaxValue", "type": "float", "comment": "最大值上限" },
-    { "name": "DefaultValue", "type": "float", "comment": "默认值" }
-  ]
-}
-```
-
-- [ ] **步骤 2：创建配置数据 Excel**
-
-手动创建 `Config/Luban/Datas/numeric.xlsx`，内容：
-
-| Id | Name | MaxValue | DefaultValue |
-|----|------|----------|-------------|
-| 1001 | MaxHP | 99999 | 0 |
-| 1002 | HP | 99999 | 0 |
-| 1003 | ATK | 99999 | 0 |
-| 1004 | DEF | 99999 | 0 |
-| 1005 | Speed | 1000 | 100 |
-| 1006 | CritRate | 1.0 | 0 |
-| 1007 | CritDmg | 10.0 | 1.5 |
-| 1008 | HitRate | 1.0 | 1.0 |
-| 1009 | DodgeRate | 1.0 | 0 |
-| 1010 | MaxMP | 9999 | 0 |
-| 1011 | MP | 9999 | 0 |
-
-- [ ] **步骤 3：创建代码生成脚本**
-
-```bash
-# 文件: Config/Luban/gen.sh
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LUBAN_TOOL="${SCRIPT_DIR}/../Tools/Luban/Luban.CLI"
-
-# 生成 C# 代码
-${LUBAN_TOOL} \
-  -t client \
-  -c cs-simple \
-  -d json \
-  --conf "${SCRIPT_DIR}/luban.conf" \
-  -o "${SCRIPT_DIR}/Output"
-
-# 将生成代码复制到项目中
-cp -r "${SCRIPT_DIR}/Output/codes/" \
-  "${SCRIPT_DIR}/../../Unity/Assets/Scripts/Hotfix/Client/Module/Config/Luban/"
-
-echo "Luban code generation complete."
-```
-
-```bash
-chmod +x Config/Luban/gen.sh
-```
-
-- [ ] **步骤 4：运行生成脚本（在 Luban 完整安装后）**
-
-```bash
-cd Config/Luban && ./gen.sh
-```
-
-注意：需要先下载 Luban.CLI 到 Tools/Luban/ 目录。如果还没下载，跳过此步骤，后续补充。
-
-- [ ] **步骤 5：Commit**
-
-```bash
-git add Config/Luban/
-git commit -m "feat: 添加 Luban 配置定义和 numeric 配置表"
-```
+- [x] **步骤 3：Commit** `74ce404`
 
 ---
 
