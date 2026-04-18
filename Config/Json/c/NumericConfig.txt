@@ -1,0 +1,13 @@
+{"dict": [
+[1, {"_t":"NumericConfig","_id":1,"Name":"HP","MaxValue":99999,"DefaultValue":100}],
+[2, {"_t":"NumericConfig","_id":2,"Name":"MaxHp","MaxValue":99999,"DefaultValue":100}],
+[3, {"_t":"NumericConfig","_id":3,"Name":"Speed","MaxValue":1000,"DefaultValue":100}],
+[1010, {"_t":"NumericConfig","_id":1010,"Name":"ATK","MaxValue":99999,"DefaultValue":10}],
+[1011, {"_t":"NumericConfig","_id":1011,"Name":"DEF","MaxValue":99999,"DefaultValue":10}],
+[1012, {"_t":"NumericConfig","_id":1012,"Name":"CritRate","MaxValue":100,"DefaultValue":5}],
+[1013, {"_t":"NumericConfig","_id":1013,"Name":"CritDmg","MaxValue":500,"DefaultValue":150}],
+[1014, {"_t":"NumericConfig","_id":1014,"Name":"HitRate","MaxValue":100,"DefaultValue":100}],
+[1015, {"_t":"NumericConfig","_id":1015,"Name":"DodgeRate","MaxValue":100,"DefaultValue":0}],
+[1016, {"_t":"NumericConfig","_id":1016,"Name":"MP","MaxValue":99999,"DefaultValue":50}],
+[1020, {"_t":"NumericConfig","_id":1020,"Name":"Lv","MaxValue":999,"DefaultValue":1}],
+]}
