@@ -27,11 +27,14 @@ namespace ET.Server
             int passed = 0;
             int failed = 0;
 
+            // 创建 UnitComponent 作为 Unit 容器
+            var unitComponent = self.Scene().AddComponent<UnitComponent>();
+
             // Test 1: ET 8 内置 5 槽位计算
             // 公式: ((base + add) * (100 + pct) / 100 + finalAdd) * (100 + finalPct) / 100
             // pct 槽位：20 表示 +20%，即公式中 (100 + 20) / 100 = 1.2
             {
-                var unit = self.Scene.AddChild<Unit>();
+                var unit = unitComponent.AddChildWithId<Unit, int>(IdGenerater.Instance.GenerateInstanceId(), 1001);
                 var comp = unit.AddComponent<NumericComponent>();
 
                 comp.Set(NumericType.ATKBase, 100f);
@@ -47,16 +50,14 @@ namespace ET.Server
 
             // Test 2: NumericModifierComponent 添加来源修饰
             {
-                var unit = self.Scene.AddChild<Unit>();
+                var unit = unitComponent.AddChildWithId<Unit, int>(IdGenerater.Instance.GenerateInstanceId(), 1001);
                 unit.AddComponent<NumericComponent>();
                 var modComp = unit.AddComponent<NumericModifierComponent>();
 
                 unit.GetComponent<NumericComponent>().Set(NumericType.ATKBase, 100f);
 
-                // 通过 ModifierComponent 添加装备加成：+80 攻击力
                 modComp.Add("equip_weapon_1", NumericType.ATKAdd, (long)(80f * 10000));
 
-                // 100 + 80 = 180
                 float result = unit.GetComponent<NumericComponent>().GetAsFloat(NumericType.ATK);
                 if (Math.Abs(result - 180f) < 0.1f) { ++passed; Log.Info("[NumericTest] PASS: ModifierComponent add"); }
                 else { ++failed; Log.Error($"[NumericTest] FAIL: ModifierComponent add, expected 180 got {result}"); }
@@ -65,17 +66,15 @@ namespace ET.Server
 
             // Test 3: NumericModifierComponent 替换来源修饰
             {
-                var unit = self.Scene.AddChild<Unit>();
+                var unit = unitComponent.AddChildWithId<Unit, int>(IdGenerater.Instance.GenerateInstanceId(), 1001);
                 unit.AddComponent<NumericComponent>();
                 var modComp = unit.AddComponent<NumericModifierComponent>();
 
                 unit.GetComponent<NumericComponent>().Set(NumericType.ATKBase, 100f);
 
-                // 先加 +50，再替换为 +80（相同 sourceTag 自动替换）
                 modComp.Add("equip_weapon_1", NumericType.ATKAdd, (long)(50f * 10000));
                 modComp.Add("equip_weapon_1", NumericType.ATKAdd, (long)(80f * 10000));
 
-                // 100 + 80 = 180（不是 100 + 50 + 80 = 230）
                 float result = unit.GetComponent<NumericComponent>().GetAsFloat(NumericType.ATK);
                 if (Math.Abs(result - 180f) < 0.1f) { ++passed; Log.Info("[NumericTest] PASS: ModifierComponent replace"); }
                 else { ++failed; Log.Error($"[NumericTest] FAIL: ModifierComponent replace, expected 180 got {result}"); }
@@ -84,7 +83,7 @@ namespace ET.Server
 
             // Test 4: NumericModifierComponent 移除来源修饰
             {
-                var unit = self.Scene.AddChild<Unit>();
+                var unit = unitComponent.AddChildWithId<Unit, int>(IdGenerater.Instance.GenerateInstanceId(), 1001);
                 unit.AddComponent<NumericComponent>();
                 var modComp = unit.AddComponent<NumericModifierComponent>();
 
@@ -104,14 +103,12 @@ namespace ET.Server
 
             // Test 5: 多槽位同时修饰（装备同时加 Add 和 Pct）
             {
-                var unit = self.Scene.AddChild<Unit>();
+                var unit = unitComponent.AddChildWithId<Unit, int>(IdGenerater.Instance.GenerateInstanceId(), 1001);
                 unit.AddComponent<NumericComponent>();
                 var modComp = unit.AddComponent<NumericModifierComponent>();
 
                 unit.GetComponent<NumericComponent>().Set(NumericType.ATKBase, 100f);
 
-                // 装备同时加 20 ATK 和 50% ATK
-                // pct 值用百分比数值：50 表示 +50%
                 var records = new List<NumericModifierRecord>
                 {
                     new NumericModifierRecord { NumericType = NumericType.ATK, SlotType = NumericType.ATKAdd, Value = (long)(20f * 10000) },

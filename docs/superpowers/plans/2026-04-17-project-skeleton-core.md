@@ -30,18 +30,18 @@
 
 | 文件 | 职责 |
 |------|------|
-| `Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericType.cs` | 属性类型枚举 |
-| `Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifier.cs` | 属性修饰结构体 |
+| `Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericType.cs` | 属性类型常量 + 5 槽位（Base/Add/Pct/FinalAdd/FinalPct） |
+| `Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifierRecord.cs` | 属性修饰记录结构体（来源管理用） |
+| `Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifierComponent.cs` | 属性修饰来源管理组件 |
 | `Unity/Assets/Scripts/Model/Share/Module/Event/GameEventDefine.cs` | 游戏事件结构体定义 |
-| `Unity/Assets/Scripts/Model/Client/Module/Numeric/NumericComponent.cs` | 属性组件（客户端） |
-| `Unity/Assets/Scripts/Model/Server/Module/Numeric/NumericComponent.cs` | 属性组件（服务端） |
+
+**注：** `NumericComponent` 及其 System 已由 ET 8 框架内置，无需重新创建。
 
 **Hotfix 层（逻辑实现）：**
 
 | 文件 | 职责 |
 |------|------|
-| `Unity/Assets/Scripts/Hotfix/Client/Module/Numeric/NumericComponentSystem.cs` | 属性系统逻辑（客户端） |
-| `Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/NumericComponentSystem.cs` | 属性系统逻辑（服务端） |
+| `Unity/Assets/Scripts/Hotfix/Share/Module/Numeric/NumericModifierComponentSystem.cs` | 属性修饰来源管理逻辑（Add/Remove/Replace） |
 
 ### 第三方工具配置
 
@@ -398,464 +398,250 @@ git commit -m "feat: 添加 NumericType 属性类型枚举"
 
 ---
 
-## 任务 7：属性修饰结构体 — NumericModifier
+## 任务 7：属性修饰来源管理 — NumericModifierComponent
+
+**背景：** ET 8 已内置完整的属性系统（`NumericComponent` + 5 槽位 Base/Add/Pct/FinalAdd/FinalPct），支持自动计算最终值和事件分发。但内置系统缺少"按来源管理修饰"的能力——换装备时需要知道该清掉哪个 Add/Pct 的值。本任务添加一个辅助组件，用 SourceTag 跟踪每个来源注入的属性值，便于替换和移除。
 
 **文件：**
-- 创建：`Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifier.cs`
+- 创建：`Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifierRecord.cs`
+- 创建：`Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifierComponent.cs`
 
-- [ ] **步骤 1：编写失败的测试**
-
-先在 Hotfix 中创建测试文件，定义期望行为。
+- [ ] **步骤 1：编写 NumericModifierRecord 数据结构**
 
 ```csharp
-// 文件: Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/Tests/NumericModifierTest.cs
-using System;
+// 文件: Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifierRecord.cs
 using System.Collections.Generic;
-using ET;
 
-namespace ET.Server
+namespace ET
 {
-    [EntitySystemOf(typeof(NumericComponentTestRunner))]
-    public static partial class NumericComponentTestRunnerSystem
+    /// <summary>
+    /// 记录一个来源（SourceTag）对某个属性的修饰值。
+    /// 用于在移除/替换修饰时精确还原 NumericComponent 的 Add/Pct 槽位。
+    /// 存储值为 long 类型，与 NumericComponent.NumericDic 一致（float 值需 * 10000）。
+    /// </summary>
+    public struct NumericModifierRecord
     {
-        [EntitySystem]
-        private static void Awake(this NumericComponentTestRunner self)
-        {
-            self.RunAllTests();
-        }
-    }
+        /// <summary>修饰的最终属性类型（如 NumericType.ATK = 1010）</summary>
+        public int NumericType;
 
-    [ComponentOf(typeof(Scene))]
-    public class NumericComponentTestRunner : Entity, IAwake
-    {
-        private int passed;
-        private int failed;
+        /// <summary>修饰的槽位类型（如 NumericType.ATKAdd = 10102 或 NumericType.ATKPct = 10103）</summary>
+        public int SlotType;
 
-        public void RunAllTests()
-        {
-            passed = 0;
-            failed = 0;
-
-            TestModifierAdd();
-            TestModifierReplace();
-            TestModifierRemove();
-
-            Log.Info($"[NumericTest] Passed: {passed}, Failed: {failed}");
-        }
-
-        private void Assert(bool condition, string message)
-        {
-            if (condition)
-            {
-                ++passed;
-            }
-            else
-            {
-                ++failed;
-                Log.Error($"[NumericTest] FAIL: {message}");
-            }
-        }
-
-        private void TestModifierAdd()
-        {
-            // 测试：添加绝对值加成后，最终属性值正确
-            var comp = this.AddComponent<NumericComponent>();
-            comp.Set(NumericType.MaxHP, 1000f);
-            comp.AddModifier(NumericType.MaxHP, new NumericModifier
-            {
-                SourceTag = "test_equip_1",
-                ModifyType = NumericModifyType.Absolute,
-                Value = 200f
-            });
-            Assert(Math.Abs(comp.Get(NumericType.MaxHP) - 1200f) < 0.01f,
-                $"AddModifier absolute: expected 1200, got {comp.Get(NumericType.MaxHP)}");
-            comp.Dispose();
-        }
-
-        private void TestModifierReplace()
-        {
-            // 测试：相同 SourceTag 的修饰会替换旧值
-            var comp = this.AddComponent<NumericComponent>();
-            comp.Set(NumericType.ATK, 100f);
-            comp.AddModifier(NumericType.ATK, new NumericModifier
-            {
-                SourceTag = "test_equip_1",
-                ModifyType = NumericModifyType.Absolute,
-                Value = 50f
-            });
-            comp.AddModifier(NumericType.ATK, new NumericModifier
-            {
-                SourceTag = "test_equip_1",
-                ModifyType = NumericModifyType.Absolute,
-                Value = 80f
-            });
-            Assert(Math.Abs(comp.Get(NumericType.ATK) - 180f) < 0.01f,
-                $"ReplaceModifier: expected 180, got {comp.Get(NumericType.ATK)}");
-            comp.Dispose();
-        }
-
-        private void TestModifierRemove()
-        {
-            // 测试：移除修饰后恢复原始值
-            var comp = this.AddComponent<NumericComponent>();
-            comp.Set(NumericType.DEF, 50f);
-            comp.AddModifier(NumericType.DEF, new NumericModifier
-            {
-                SourceTag = "test_buff_1",
-                ModifyType = NumericModifyType.Percent,
-                Value = 0.2f
-            });
-            Assert(Math.Abs(comp.Get(NumericType.DEF) - 60f) < 0.01f,
-                $"AddModifier percent: expected 60, got {comp.Get(NumericType.DEF)}");
-            comp.RemoveModifier(NumericType.DEF, "test_buff_1");
-            Assert(Math.Abs(comp.Get(NumericType.DEF) - 50f) < 0.01f,
-                $"RemoveModifier: expected 50, got {comp.Get(NumericType.DEF)}");
-            comp.Dispose();
-        }
+        /// <summary>修饰值（long，与 NumericComponent.NumericDic 一致）</summary>
+        public long Value;
     }
 }
 ```
 
-注意：此测试暂时无法编译，因为 NumericModifier、NumericComponent 等类型还未定义。这是预期行为。
-
-- [ ] **步骤 2：编写 NumericModifier 结构体**
+- [ ] **步骤 2：编写 NumericModifierComponent**
 
 ```csharp
-// 文件: Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifier.cs
+// 文件: Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifierComponent.cs
+using System.Collections.Generic;
+
 namespace ET
 {
     /// <summary>
-    /// 属性修饰类型
+    /// 属性修饰来源管理组件。挂载在 Unit 上，与 NumericComponent 配合使用。
+    /// 职责：跟踪每个 SourceTag 注入了哪些属性修饰，支持按来源添加/移除/替换。
+    /// 内部结构：SourceTag → List&lt;NumericModifierRecord&gt;
     /// </summary>
-    public enum NumericModifyType
+    [ComponentOf(typeof(Unit))]
+    public class NumericModifierComponent : Entity, IAwake, IDestroy
     {
-        /// <summary>绝对值加成（如 +200 HP）</summary>
-        Absolute = 0,
-        /// <summary>百分比加成（如 +20% ATK，计算为 base * value）</summary>
-        Percent = 1,
-    }
-
-    /// <summary>
-    /// 属性修饰结构体。通过 SourceTag 标识来源，便于替换和移除。
-    /// </summary>
-    public struct NumericModifier
-    {
-        /// <summary>来源标识（如 "equip_1001"、"buff_2003"、"fashion_fire"）</summary>
-        public string SourceTag;
-
-        /// <summary>修饰类型：绝对值 or 百分比</summary>
-        public NumericModifyType ModifyType;
-
-        /// <summary>修饰值（绝对值为具体数值，百分比为小数比例如 0.2 = 20%）</summary>
-        public float Value;
+        /// <summary>来源标签 → 该来源的所有修饰记录</summary>
+        public Dictionary<string, List<NumericModifierRecord>> Modifiers = new();
     }
 }
 ```
 
 - [ ] **步骤 3：确认编译通过**
 
-等待 Unity 自动编译，确认 NumericModifier 和 NumericModifyType 无错误。
+等待 Unity 自动编译，确认无错误。
 
 - [ ] **步骤 4：Commit**
 
 ```bash
-git add Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifier.cs \
-       Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/Tests/NumericModifierTest.cs
-git commit -m "feat: 添加 NumericModifier 属性修饰结构体 + 测试用例"
+git add Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifierRecord.cs \
+       Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericModifierComponent.cs
+git commit -m "feat: 添加 NumericModifierRecord + NumericModifierComponent（属性修饰来源管理）"
 ```
 
 ---
 
-## 任务 8：属性组件 — NumericComponent
+## 任务 8：属性修饰来源管理逻辑 — NumericModifierComponentSystem
 
 **文件：**
-- 创建：`Unity/Assets/Scripts/Model/Client/Module/Numeric/NumericComponent.cs`
-- 创建：`Unity/Assets/Scripts/Model/Server/Module/Numeric/NumericComponent.cs`
+- 创建：`Unity/Assets/Scripts/Hotfix/Share/Module/Numeric/NumericModifierComponentSystem.cs`
 
-- [ ] **步骤 1：编写共享 NumericComponent 数据定义**
-
-由于 ET 8 的 Client 和 Server 使用不同命名空间的 Component 定义，
-在 Share 层创建一个共享的数据存储类：
+- [ ] **步骤 1：编写 NumericModifierComponentSystem**
 
 ```csharp
-// 文件: Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericData.cs
+// 文件: Unity/Assets/Scripts/Hotfix/Share/Module/Numeric/NumericModifierComponentSystem.cs
 using System.Collections.Generic;
 
 namespace ET
 {
-    /// <summary>
-    /// 属性数据存储。由 NumericComponent 持有，客户端服务端共用计算逻辑。
-    /// 计算公式：最终值 = (基础值 + Σ绝对值加成) * (1 + Σ百分比加成)
-    /// </summary>
-    public class NumericData
+    [EntitySystemOf(typeof(NumericModifierComponent))]
+    [FriendOf(typeof(NumericModifierComponent))]
+    public static partial class NumericModifierComponentSystem
     {
-        /// <summary>基础值（角色等级、配置表定义的原始值）</summary>
-        private readonly Dictionary<int, float> baseValues = new();
-
-        /// <summary>属性修饰器：NumericType → SourceTag → Modifier</summary>
-        private readonly Dictionary<int, Dictionary<string, NumericModifier>> modifiers = new();
-
-        /// <summary>缓存最终值，脏标记时重算</summary>
-        private readonly Dictionary<int, float> finalValues = new();
-
-        /// <summary>脏标记：哪些 NumericType 需要重算</summary>
-        private readonly HashSet<int> dirtySet = new();
-
-        public void SetBase(int numericType, float value)
+        [EntitySystem]
+        private static void Awake(this NumericModifierComponent self)
         {
-            baseValues[numericType] = value;
-            dirtySet.Add(numericType);
         }
 
-        public float GetBase(int numericType)
+        [EntitySystem]
+        private static void Destroy(this NumericModifierComponent self)
         {
-            return baseValues.TryGetValue(numericType, out float v) ? v : 0f;
+            self.RemoveAll();
+            self.Modifiers.Clear();
         }
 
-        public void AddModifier(int numericType, NumericModifier modifier)
+        /// <summary>
+        /// 添加来源修饰。自动将值写入 NumericComponent 对应槽位，并记录修饰来源。
+        /// 如果该 SourceTag 已有修饰，先移除旧的再添加新的（替换语义）。
+        /// </summary>
+        public static void Add(this NumericModifierComponent self, string sourceTag, int slotType, long value)
         {
-            if (!modifiers.TryGetValue(numericType, out var dict))
+            // 获取该属性对应的最终属性类型，用于查找 NumericComponent
+            int finalType = slotType / 10;
+
+            var numericComp = self.GetParent<Unit>().GetComponent<NumericComponent>();
+            if (numericComp == null) return;
+
+            // 如果该来源已有修饰记录，先移除旧的
+            if (self.Modifiers.TryGetValue(sourceTag, out var oldRecords))
             {
-                dict = new Dictionary<string, NumericModifier>();
-                modifiers[numericType] = dict;
-            }
-            dict[modifier.SourceTag] = modifier;
-            dirtySet.Add(numericType);
-        }
-
-        public void RemoveModifier(int numericType, string sourceTag)
-        {
-            if (modifiers.TryGetValue(numericType, out var dict))
-            {
-                dict.Remove(sourceTag);
-                dirtySet.Add(numericType);
-            }
-        }
-
-        public float GetFinal(int numericType)
-        {
-            if (dirtySet.Remove(numericType))
-            {
-                finalValues[numericType] = Calculate(numericType);
-            }
-            return finalValues.TryGetValue(numericType, out float v) ? v : 0f;
-        }
-
-        private float Calculate(int numericType)
-        {
-            float baseVal = GetBase(numericType);
-            float absoluteSum = 0f;
-            float percentSum = 0f;
-
-            if (modifiers.TryGetValue(numericType, out var dict))
-            {
-                foreach (var kv in dict)
+                foreach (var record in oldRecords)
                 {
-                    if (kv.Value.ModifyType == NumericModifyType.Absolute)
-                        absoluteSum += kv.Value.Value;
-                    else
-                        percentSum += kv.Value.Value;
+                    // 将旧值从对应槽位减去
+                    long oldSlotValue = numericComp.GetByKey(record.SlotType);
+                    long newSlotValue = oldSlotValue - record.Value;
+                    numericComp.Insert(record.SlotType, newSlotValue);
                 }
             }
 
-            return (baseVal + absoluteSum) * (1f + percentSum);
+            // 将新值加到槽位上
+            long currentSlotValue = numericComp.GetByKey(slotType);
+            numericComp.Insert(slotType, currentSlotValue + value);
+
+            // 记录新修饰
+            var newRecords = new List<NumericModifierRecord>
+            {
+                new NumericModifierRecord
+                {
+                    NumericType = finalType,
+                    SlotType = slotType,
+                    Value = value
+                }
+            };
+            self.Modifiers[sourceTag] = newRecords;
         }
 
-        public void Reset()
+        /// <summary>
+        /// 添加来源修饰（一次添加多个槽位，如装备同时加 Add 和 Pct）。
+        /// </summary>
+        public static void Add(this NumericModifierComponent self, string sourceTag, List<NumericModifierRecord> records)
         {
-            baseValues.Clear();
-            modifiers.Clear();
-            finalValues.Clear();
-            dirtySet.Clear();
+            var numericComp = self.GetParent<Unit>().GetComponent<NumericComponent>();
+            if (numericComp == null) return;
+
+            // 先移除该来源的旧修饰
+            if (self.Modifiers.TryGetValue(sourceTag, out var oldRecords))
+            {
+                foreach (var record in oldRecords)
+                {
+                    long oldSlotValue = numericComp.GetByKey(record.SlotType);
+                    numericComp.Insert(record.SlotType, oldSlotValue - record.Value);
+                }
+            }
+
+            // 添加新修饰
+            foreach (var record in records)
+            {
+                long currentSlotValue = numericComp.GetByKey(record.SlotType);
+                numericComp.Insert(record.SlotType, currentSlotValue + record.Value);
+            }
+
+            self.Modifiers[sourceTag] = records;
+        }
+
+        /// <summary>
+        /// 移除指定来源的所有修饰。
+        /// </summary>
+        public static void Remove(this NumericModifierComponent self, string sourceTag)
+        {
+            if (!self.Modifiers.TryGetValue(sourceTag, out var records)) return;
+
+            var numericComp = self.GetParent<Unit>().GetComponent<NumericComponent>();
+            if (numericComp != null)
+            {
+                foreach (var record in records)
+                {
+                    long oldSlotValue = numericComp.GetByKey(record.SlotType);
+                    numericComp.Insert(record.SlotType, oldSlotValue - record.Value);
+                }
+            }
+
+            self.Modifiers.Remove(sourceTag);
+        }
+
+        /// <summary>
+        /// 移除所有来源的修饰。
+        /// </summary>
+        public static void RemoveAll(this NumericModifierComponent self)
+        {
+            var numericComp = self.GetParent<Unit>().GetComponent<NumericComponent>();
+            if (numericComp != null)
+            {
+                foreach (var kv in self.Modifiers)
+                {
+                    foreach (var record in kv.Value)
+                    {
+                        long oldSlotValue = numericComp.GetByKey(record.SlotType);
+                        numericComp.Insert(record.SlotType, oldSlotValue - record.Value);
+                    }
+                }
+            }
+            self.Modifiers.Clear();
         }
     }
 }
 ```
 
-- [ ] **步骤 2：编写客户端 NumericComponent**
-
-```csharp
-// 文件: Unity/Assets/Scripts/Model/Client/Module/Numeric/NumericComponent.cs
-namespace ET.Client
-{
-    [ComponentOf(typeof(Unit))]
-    public class NumericComponent : Entity, IAwake, IDestroy
-    {
-        public NumericData Data { get; set; }
-    }
-}
-```
-
-- [ ] **步骤 3：编写服务端 NumericComponent**
-
-```csharp
-// 文件: Unity/Assets/Scripts/Model/Server/Module/Numeric/NumericComponent.cs
-namespace ET.Server
-{
-    [ComponentOf(typeof(Unit))]
-    public class NumericComponent : Entity, IAwake, IDestroy
-    {
-        public NumericData Data { get; set; }
-    }
-}
-```
-
-- [ ] **步骤 4：确认编译通过**
+- [ ] **步骤 2：确认编译通过**
 
 等待 Unity 自动编译，确认无错误。
 
-- [ ] **步骤 5：Commit**
+- [ ] **步骤 3：Commit**
 
 ```bash
-git add Unity/Assets/Scripts/Model/Share/Module/Numeric/NumericData.cs \
-       Unity/Assets/Scripts/Model/Client/Module/Numeric/NumericComponent.cs \
-       Unity/Assets/Scripts/Model/Server/Module/Numeric/NumericComponent.cs
-git commit -m "feat: 添加 NumericData 属性存储 + Client/Server NumericComponent"
+git add Unity/Assets/Scripts/Hotfix/Share/Module/Numeric/NumericModifierComponentSystem.cs
+git commit -m "feat: 实现 NumericModifierComponentSystem（来源修饰管理逻辑）"
 ```
 
 ---
 
-## 任务 9：属性系统逻辑 — NumericComponentSystem
+## 任务 9：属性系统测试 — NumericTestRunner
 
 **文件：**
-- 创建：`Unity/Assets/Scripts/Hotfix/Client/Module/Numeric/NumericComponentSystem.cs`
-- 创建：`Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/NumericComponentSystem.cs`
+- 创建：`Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/Tests/NumericTestRunner.cs`
 
-- [ ] **步骤 1：编写客户端 NumericComponentSystem**
+**说明：** 测试 ET 8 内置 NumericComponent 的 5 槽位计算，以及 NumericModifierComponent 的来源管理能力。
 
-```csharp
-// 文件: Unity/Assets/Scripts/Hotfix/Client/Module/Numeric/NumericComponentSystem.cs
-using System;
-
-namespace ET.Client
-{
-    [EntitySystemOf(typeof(NumericComponent))]
-    [FriendOf(typeof(NumericComponent))]
-    public static partial class NumericComponentSystem
-    {
-        [EntitySystem]
-        private static void Awake(this NumericComponent self)
-        {
-            self.Data = new NumericData();
-        }
-
-        [EntitySystem]
-        private static void Destroy(this NumericComponent self)
-        {
-            self.Data?.Reset();
-            self.Data = null;
-        }
-
-        /// <summary>设置基础值</summary>
-        public static void Set(this NumericComponent self, int numericType, float value)
-        {
-            self.Data.SetBase(numericType, value);
-        }
-
-        /// <summary>获取最终值</summary>
-        public static float Get(this NumericComponent self, int numericType)
-        {
-            return self.Data.GetFinal(numericType);
-        }
-
-        /// <summary>添加属性修饰</summary>
-        public static void AddModifier(this NumericComponent self, int numericType, NumericModifier modifier)
-        {
-            self.Data.AddModifier(numericType, modifier);
-        }
-
-        /// <summary>移除属性修饰</summary>
-        public static void RemoveModifier(this NumericComponent self, int numericType, string sourceTag)
-        {
-            self.Data.RemoveModifier(numericType, sourceTag);
-        }
-    }
-}
-```
-
-- [ ] **步骤 2：编写服务端 NumericComponentSystem**
+- [ ] **步骤 1：编写测试运行器**
 
 ```csharp
-// 文件: Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/NumericComponentSystem.cs
+// 文件: Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/Tests/NumericTestRunner.cs
 using System;
-
-namespace ET.Server
-{
-    [EntitySystemOf(typeof(NumericComponent))]
-    [FriendOf(typeof(NumericComponent))]
-    public static partial class NumericComponentSystem
-    {
-        [EntitySystem]
-        private static void Awake(this NumericComponent self)
-        {
-            self.Data = new NumericData();
-        }
-
-        [EntitySystem]
-        private static void Destroy(this NumericComponent self)
-        {
-            self.Data?.Reset();
-            self.Data = null;
-        }
-
-        /// <summary>设置基础值</summary>
-        public static void Set(this NumericComponent self, int numericType, float value)
-        {
-            self.Data.SetBase(numericType, value);
-        }
-
-        /// <summary>获取最终值</summary>
-        public static float Get(this NumericComponent self, int numericType)
-        {
-            return self.Data.GetFinal(numericType);
-        }
-
-        /// <summary>添加属性修饰</summary>
-        public static void AddModifier(this NumericComponent self, int numericType, NumericModifier modifier)
-        {
-            self.Data.AddModifier(numericType, modifier);
-        }
-
-        /// <summary>移除属性修饰</summary>
-        public static void RemoveModifier(this NumericComponent self, int numericType, string sourceTag)
-        {
-            self.Data.RemoveModifier(numericType, sourceTag);
-        }
-    }
-}
-```
-
-- [ ] **步骤 3：确认编译通过**
-
-等待 Unity 自动编译，确认无错误。
-
-- [ ] **步骤 4：Commit**
-
-```bash
-git add Unity/Assets/Scripts/Hotfix/Client/Module/Numeric/NumericComponentSystem.cs \
-       Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/NumericComponentSystem.cs
-git commit -m "feat: 实现 Client/Server NumericComponentSystem"
-```
-
----
-
-## 任务 10：运行属性系统测试
-
-**文件：**
-- 修改：`Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/Tests/NumericModifierTest.cs`
-
-- [ ] **步骤 1：修复测试文件以使用实际 API**
-
-```csharp
-// 文件: Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/Tests/NumericModifierTest.cs
-using System;
-using ET;
+using System.Collections.Generic;
 
 namespace ET.Server
 {
     /// <summary>
     /// 属性系统测试运行器。挂载到 Scene 上后自动运行所有测试并输出结果。
-    /// 使用方式：在服务端启动流程中临时添加 this.Scene.AddComponent<NumericTestRunner>();
+    /// 使用方式：在服务端启动流程中临时添加 self.Scene.AddComponent<NumericTestRunner>();
     /// </summary>
     [ComponentOf(typeof(Scene))]
     public class NumericTestRunner : Entity, IAwake
@@ -877,89 +663,104 @@ namespace ET.Server
             int passed = 0;
             int failed = 0;
 
-            // Test 1: 绝对值加成
+            // Test 1: ET 8 内置 5 槽位计算
+            // 公式: ((base + add) * (100 + pct) / 100 + finalAdd) * (100 + finalPct) / 100
+            // pct 槽位：20 表示 +20%，即公式中 (100 + 20) / 100 = 1.2
             {
                 var unit = self.Scene.AddChild<Unit>();
                 var comp = unit.AddComponent<NumericComponent>();
-                comp.Set(NumericType.MaxHP, 1000f);
-                comp.AddModifier(NumericType.MaxHP, new NumericModifier
-                {
-                    SourceTag = "test_equip_1",
-                    ModifyType = NumericModifyType.Absolute,
-                    Value = 200f
-                });
-                float result = comp.Get(NumericType.MaxHP);
-                if (Math.Abs(result - 1200f) < 0.01f) { ++passed; Log.Info("[NumericTest] PASS: AddModifier absolute"); }
-                else { ++failed; Log.Error($"[NumericTest] FAIL: AddModifier absolute, expected 1200 got {result}"); }
+
+                comp.Set(NumericType.ATKBase, 100f);
+                comp.Set(NumericType.ATKAdd, 50f);
+                comp.Set(NumericType.ATKPct, 20f); // +20%
+
+                // (100 + 50) * (100 + 20) / 100 = 150 * 1.2 = 180
+                float result = comp.GetAsFloat(NumericType.ATK);
+                if (Math.Abs(result - 180f) < 0.1f) { ++passed; Log.Info("[NumericTest] PASS: 5-slot calculation"); }
+                else { ++failed; Log.Error($"[NumericTest] FAIL: 5-slot, expected 180 got {result}"); }
                 unit.Dispose();
             }
 
-            // Test 2: 相同 SourceTag 替换
+            // Test 2: NumericModifierComponent 添加来源修饰
             {
                 var unit = self.Scene.AddChild<Unit>();
-                var comp = unit.AddComponent<NumericComponent>();
-                comp.Set(NumericType.ATK, 100f);
-                comp.AddModifier(NumericType.ATK, new NumericModifier
-                {
-                    SourceTag = "test_equip_1",
-                    ModifyType = NumericModifyType.Absolute,
-                    Value = 50f
-                });
-                comp.AddModifier(NumericType.ATK, new NumericModifier
-                {
-                    SourceTag = "test_equip_1",
-                    ModifyType = NumericModifyType.Absolute,
-                    Value = 80f
-                });
-                float result = comp.Get(NumericType.ATK);
-                if (Math.Abs(result - 180f) < 0.01f) { ++passed; Log.Info("[NumericTest] PASS: ReplaceModifier"); }
-                else { ++failed; Log.Error($"[NumericTest] FAIL: ReplaceModifier, expected 180 got {result}"); }
+                unit.AddComponent<NumericComponent>();
+                var modComp = unit.AddComponent<NumericModifierComponent>();
+
+                // 设置基础值
+                unit.GetComponent<NumericComponent>().Set(NumericType.ATKBase, 100f);
+
+                // 通过 ModifierComponent 添加装备加成：+80 攻击力
+                // ATKAdd 内部存储为 long，80.0f * 10000 = 800000
+                modComp.Add("equip_weapon_1", NumericType.ATKAdd, (long)(80f * 10000));
+
+                float result = unit.GetComponent<NumericComponent>().GetAsFloat(NumericType.ATK);
+                // 100 + 80 = 180
+                if (Math.Abs(result - 180f) < 0.1f) { ++passed; Log.Info("[NumericTest] PASS: ModifierComponent add"); }
+                else { ++failed; Log.Error($"[NumericTest] FAIL: ModifierComponent add, expected 180 got {result}"); }
                 unit.Dispose();
             }
 
-            // Test 3: 百分比加成 + 移除
+            // Test 3: NumericModifierComponent 替换来源修饰
             {
                 var unit = self.Scene.AddChild<Unit>();
-                var comp = unit.AddComponent<NumericComponent>();
-                comp.Set(NumericType.DEF, 50f);
-                comp.AddModifier(NumericType.DEF, new NumericModifier
-                {
-                    SourceTag = "test_buff_1",
-                    ModifyType = NumericModifyType.Percent,
-                    Value = 0.2f
-                });
-                float withBuff = comp.Get(NumericType.DEF);
-                if (Math.Abs(withBuff - 60f) < 0.01f) { ++passed; Log.Info("[NumericTest] PASS: AddModifier percent"); }
-                else { ++failed; Log.Error($"[NumericTest] FAIL: AddModifier percent, expected 60 got {withBuff}"); }
+                unit.AddComponent<NumericComponent>();
+                var modComp = unit.AddComponent<NumericModifierComponent>();
 
-                comp.RemoveModifier(NumericType.DEF, "test_buff_1");
-                float removed = comp.Get(NumericType.DEF);
-                if (Math.Abs(removed - 50f) < 0.01f) { ++passed; Log.Info("[NumericTest] PASS: RemoveModifier"); }
-                else { ++failed; Log.Error($"[NumericTest] FAIL: RemoveModifier, expected 50 got {removed}"); }
+                unit.GetComponent<NumericComponent>().Set(NumericType.ATKBase, 100f);
+
+                // 先加 +50
+                modComp.Add("equip_weapon_1", NumericType.ATKAdd, (long)(50f * 10000));
+                // 替换为 +80（相同 sourceTag 自动替换）
+                modComp.Add("equip_weapon_1", NumericType.ATKAdd, (long)(80f * 10000));
+
+                float result = unit.GetComponent<NumericComponent>().GetAsFloat(NumericType.ATK);
+                // 100 + 80 = 180（不是 100 + 50 + 80 = 230）
+                if (Math.Abs(result - 180f) < 0.1f) { ++passed; Log.Info("[NumericTest] PASS: ModifierComponent replace"); }
+                else { ++failed; Log.Error($"[NumericTest] FAIL: ModifierComponent replace, expected 180 got {result}"); }
                 unit.Dispose();
             }
 
-            // Test 4: 绝对值 + 百分比叠加
+            // Test 4: NumericModifierComponent 移除来源修饰
             {
                 var unit = self.Scene.AddChild<Unit>();
-                var comp = unit.AddComponent<NumericComponent>();
-                comp.Set(NumericType.Speed, 100f);
-                comp.AddModifier(NumericType.Speed, new NumericModifier
+                unit.AddComponent<NumericComponent>();
+                var modComp = unit.AddComponent<NumericModifierComponent>();
+
+                unit.GetComponent<NumericComponent>().Set(NumericType.DEFBase, 50f);
+
+                modComp.Add("buff_shield", NumericType.DEFAdd, (long)(20f * 10000));
+                float withBuff = unit.GetComponent<NumericComponent>().GetAsFloat(NumericType.DEF);
+                if (Math.Abs(withBuff - 70f) < 0.1f) { ++passed; Log.Info("[NumericTest] PASS: ModifierComponent add buff"); }
+                else { ++failed; Log.Error($"[NumericTest] FAIL: ModifierComponent add buff, expected 70 got {withBuff}"); }
+
+                modComp.Remove("buff_shield");
+                float removed = unit.GetComponent<NumericComponent>().GetAsFloat(NumericType.DEF);
+                if (Math.Abs(removed - 50f) < 0.1f) { ++passed; Log.Info("[NumericTest] PASS: ModifierComponent remove"); }
+                else { ++failed; Log.Error($"[NumericTest] FAIL: ModifierComponent remove, expected 50 got {removed}"); }
+                unit.Dispose();
+            }
+
+            // Test 5: 多槽位同时修饰（装备同时加 Add 和 Pct）
+            {
+                var unit = self.Scene.AddChild<Unit>();
+                unit.AddComponent<NumericComponent>();
+                var modComp = unit.AddComponent<NumericModifierComponent>();
+
+                unit.GetComponent<NumericComponent>().Set(NumericType.ATKBase, 100f);
+
+                // 装备同时加 20 ATK 和 50% ATK
+                var records = new List<NumericModifierRecord>
                 {
-                    SourceTag = "equip_speed",
-                    ModifyType = NumericModifyType.Absolute,
-                    Value = 20f
-                });
-                comp.AddModifier(NumericType.Speed, new NumericModifier
-                {
-                    SourceTag = "buff_speed",
-                    ModifyType = NumericModifyType.Percent,
-                    Value = 0.5f
-                });
-                // (100 + 20) * (1 + 0.5) = 120 * 1.5 = 180
-                float result = comp.Get(NumericType.Speed);
-                if (Math.Abs(result - 180f) < 0.01f) { ++passed; Log.Info("[NumericTest] PASS: Absolute + Percent combined"); }
-                else { ++failed; Log.Error($"[NumericTest] FAIL: Absolute + Percent, expected 180 got {result}"); }
+                    new NumericModifierRecord { NumericType = NumericType.ATK, SlotType = NumericType.ATKAdd, Value = (long)(20f * 10000) },
+                    new NumericModifierRecord { NumericType = NumericType.ATK, SlotType = NumericType.ATKPct, Value = (long)(0.5f * 10000) },
+                };
+                modComp.Add("equip_ring_1", records);
+
+                // 公式: (100 + 20) * (100 + 50) / 100 = 120 * 1.5 = 180
+                float result = unit.GetComponent<NumericComponent>().GetAsFloat(NumericType.ATK);
+                if (Math.Abs(result - 180f) < 0.1f) { ++passed; Log.Info("[NumericTest] PASS: Multi-slot modifier"); }
+                else { ++failed; Log.Error($"[NumericTest] FAIL: Multi-slot, expected 180 got {result}"); }
                 unit.Dispose();
             }
 
@@ -970,38 +771,59 @@ namespace ET.Server
 }
 ```
 
-- [ ] **步骤 2：在服务端启动流程中临时添加测试**
+- [ ] **步骤 2：确认编译通过**
 
-找到 ET 8 的服务端 Entry 场景启动代码（通常在 `Hotfix/Server/Demo/Entry/` 下），
-在合适位置临时添加测试运行器。具体位置需要查看 ET 8 源码确认。
+等待 Unity 自动编译，确认无错误。
 
-手动操作：
-1. 找到服务端启动入口
-2. 添加 `scene.AddComponent<NumericTestRunner>();`
-3. 运行服务端，查看 Console 输出
-
-- [ ] **步骤 3：运行测试并确认通过**
-
-启动服务端，检查 Console 输出：
-```
-[NumericTest] PASS: AddModifier absolute
-[NumericTest] PASS: ReplaceModifier
-[NumericTest] PASS: AddModifier percent
-[NumericTest] PASS: RemoveModifier
-[NumericTest] PASS: Absolute + Percent combined
-[NumericTest] === Results: 5 passed, 0 failed ===
-```
-
-- [ ] **步骤 4：移除临时测试调用，保留测试代码**
-
-从启动入口中移除 `AddComponent<NumericTestRunner>()` 的临时调用。
-测试类本身保留在代码中，后续可通过专门的测试入口运行。
-
-- [ ] **步骤 5：Commit**
+- [ ] **步骤 3：Commit**
 
 ```bash
-git add Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/Tests/NumericModifierTest.cs
-git commit -m "feat: 完善属性系统测试用例，5 项测试全部通过"
+git add Unity/Assets/Scripts/Hotfix/Server/Module/Numeric/Tests/NumericTestRunner.cs
+git commit -m "feat: 添加属性系统测试用例（ET 8 内置 5 槽位 + NumericModifierComponent 来源管理）"
+```
+
+---
+
+## 任务 10：运行属性系统测试并验证
+
+- [ ] **步骤 1：在服务端启动流程中临时添加测试**
+
+找到 ET 8 的服务端启动代码（`Hotfix/Server/Demo/` 下），
+在 Unit 创建后临时添加：
+
+```csharp
+// 临时测试代码，验证完成后移除
+self.Scene.AddComponent<NumericTestRunner>();
+```
+
+手动操作：
+1. 找到服务端 Entry 或 Map 场景启动位置
+2. 添加上述测试组件
+3. 运行服务端
+
+- [ ] **步骤 2：运行服务端，检查 Console 输出**
+
+预期输出：
+```
+[NumericTest] PASS: 5-slot calculation
+[NumericTest] PASS: ModifierComponent add
+[NumericTest] PASS: ModifierComponent replace
+[NumericTest] PASS: ModifierComponent add buff
+[NumericTest] PASS: ModifierComponent remove
+[NumericTest] PASS: Multi-slot modifier
+[NumericTest] === Results: 6 passed, 0 failed ===
+```
+
+- [ ] **步骤 3：移除临时测试调用，保留测试代码**
+
+从启动入口中移除 `AddComponent<NumericTestRunner>()` 的临时调用。
+测试类 `NumericTestRunner` 保留在代码中，后续可通过专门的测试入口运行。
+
+- [ ] **步骤 4：Commit**
+
+```bash
+git add -A
+git commit -m "chore: 属性系统测试验证通过（6 项全 PASS），移除临时测试调用"
 ```
 
 ---
