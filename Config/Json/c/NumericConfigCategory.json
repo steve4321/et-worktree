@@ -1,0 +1,68 @@
+[
+  {
+    "Id": 1,
+    "Name": "HP",
+    "MaxValue": 99999,
+    "DefaultValue": 100
+  },
+  {
+    "Id": 2,
+    "Name": "MaxHp",
+    "MaxValue": 99999,
+    "DefaultValue": 100
+  },
+  {
+    "Id": 3,
+    "Name": "Speed",
+    "MaxValue": 1000,
+    "DefaultValue": 100
+  },
+  {
+    "Id": 1010,
+    "Name": "ATK",
+    "MaxValue": 99999,
+    "DefaultValue": 10
+  },
+  {
+    "Id": 1011,
+    "Name": "DEF",
+    "MaxValue": 99999,
+    "DefaultValue": 10
+  },
+  {
+    "Id": 1012,
+    "Name": "CritRate",
+    "MaxValue": 100,
+    "DefaultValue": 5
+  },
+  {
+    "Id": 1013,
+    "Name": "CritDmg",
+    "MaxValue": 500,
+    "DefaultValue": 150
+  },
+  {
+    "Id": 1014,
+    "Name": "HitRate",
+    "MaxValue": 100,
+    "DefaultValue": 100
+  },
+  {
+    "Id": 1015,
+    "Name": "DodgeRate",
+    "MaxValue": 100,
+    "DefaultValue": 0
+  },
+  {
+    "Id": 1016,
+    "Name": "MP",
+    "MaxValue": 99999,
+    "DefaultValue": 50
+  },
+  {
+    "Id": 1020,
+    "Name": "Lv",
+    "MaxValue": 999,
+    "DefaultValue": 1
+  }
+]

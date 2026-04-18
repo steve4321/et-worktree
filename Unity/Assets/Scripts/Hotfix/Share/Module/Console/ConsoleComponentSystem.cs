@@ -31,7 +31,14 @@ namespace ET
                         Console.Write($"{modeContex?.Mode ?? ""}> ");
                         return Console.In.ReadLine();
                     }, self.CancellationTokenSource.Token);
-                    
+
+                    if (line == null)
+                    {
+                        // Non-interactive environment, sleep briefly and continue
+                        await Task.Delay(100);
+                        continue;
+                    }
+
                     line = line.Trim();
 
                     switch (line)
