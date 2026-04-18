@@ -11,4 +11,19 @@
       <Collector CollectPath="Assets/Bundles/Scenes" CollectGUID="406b13cb70603ef449d91f5572708db2" CollectType="MainAssetCollector" AddressRule="AddressByFileName" PackRule="PackDirectory" FilterRule="CollectScene" UserData="" AssetTags="" />
     </Group>
   </Package>
+  <Package PackageName="CommonPackage" PackageDesc="通用资源（角色动画、技能特效、通用怪物）">
+    <Group GroupActiveRule="EnableGroup" GroupName="CommonGroup" GroupDesc="" AssetTags="">
+      <Collector CollectPath="Assets/Bundles/Common" CollectGUID="ba00e353704004d3f9a5591f79c984ae" CollectType="MainAssetCollector" AddressRule="AddressByFileName" PackRule="PackDirectory" FilterRule="CollectAll" UserData="" AssetTags="" />
+    </Group>
+  </Package>
+  <Package PackageName="StagePackage" PackageDesc="关卡资源（背景、Boss特效、精英怪动画）">
+    <Group GroupActiveRule="EnableGroup" GroupName="StageGroup" GroupDesc="" AssetTags="">
+      <Collector CollectPath="Assets/Bundles/Stage" CollectGUID="e408e4f24e1e04deb935aec9fc9e79d1" CollectType="MainAssetCollector" AddressRule="AddressByFileName" PackRule="PackDirectory" FilterRule="CollectAll" UserData="" AssetTags="" />
+    </Group>
+  </Package>
+  <Package PackageName="FashionPackage" PackageDesc="时装资源（Spine动画、幻化外观）">
+    <Group GroupActiveRule="EnableGroup" GroupName="FashionGroup" GroupDesc="" AssetTags="">
+      <Collector CollectPath="Assets/Bundles/Fashion" CollectGUID="e26048f1474db4f53812517ae9ddefde" CollectType="MainAssetCollector" AddressRule="AddressByFileName" PackRule="PackDirectory" FilterRule="CollectAll" UserData="" AssetTags="" />
+    </Group>
+  </Package>
 </root>
