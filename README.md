@@ -1,3 +1,9 @@
+# ET-Worktree
+
+本项目基于 ET框架 + Git Worktree，实现多人并行开发加速游戏开发流程。
+
+通过 Git Worktree 创建独立工作树，开发者可以在同一仓库下同时进行多个功能的开发，无需频繁切换分支或解决冲突，显著提升开发效率。
+
 # English: please use your browser to translate to english
 
 # __ET框架讨论群: 474643097 新手请加新手群:688514974__  
